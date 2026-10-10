@@ -1,22 +1,6 @@
 // ============================================================
 // МИС — Медицинская информационная система
-// Главный файл приложения (требование 1.4)
-//
-// Модули внутри одного файла:
-//   1. Утилиты
-//   2. Тема (4.1-4.5)
-//   3. Toast-уведомления (5.1)
-//   4. Модальное окно + focus trap (2.5, 5.1)
-//   5. Табы (5.1)
-//   6. Аккордеон (5.1)
-//   7. Dropdown-меню (5.1)
-//   8. Пагинация (5.1)
-//   9. Валидация форм (5.3)
-//  10. Рендер (1.4)
-//  11. Мобильное меню (3.2)
-//  12. Счётчики / микро-анимации (5.4)
-//  13. Делегирование событий (5.4)
-//  14. Инициализация
+// app.js
 // ============================================================
 
 import { DATA, LABELS } from './data.js';
@@ -25,9 +9,6 @@ import { DATA, LABELS } from './data.js';
    1. УТИЛИТЫ
    ============================================================ */
 
-/**
- * Создание DOM-элемента (запрет на innerHTML — требование 1.4)
- */
 const el = (tag, attrs = {}, children = []) => {
   const node = document.createElement(tag);
 
@@ -36,12 +17,10 @@ const el = (tag, attrs = {}, children = []) => {
 
     if (key === 'class') {
       node.className = value;
-    } else if (key === 'dataset') {
-      Object.entries(value).forEach(([k, v]) => {
-        node.dataset[k] = v;
-      });
     } else if (key === 'text') {
       node.textContent = value;
+    } else if (key === 'dataset') {
+      Object.entries(value).forEach(([k, v]) => { node.dataset[k] = v; });
     } else if (key.startsWith('on') && typeof value === 'function') {
       node.addEventListener(key.slice(2).toLowerCase(), value);
     } else if (value === true) {
@@ -53,69 +32,50 @@ const el = (tag, attrs = {}, children = []) => {
 
   const append = (child) => {
     if (child === null || child === undefined || child === false) return;
-    if (Array.isArray(child)) {
-      child.forEach(append);
-    } else if (typeof child === 'string' || typeof child === 'number') {
+    if (Array.isArray(child)) child.forEach(append);
+    else if (typeof child === 'string' || typeof child === 'number') {
       node.appendChild(document.createTextNode(String(child)));
     } else if (child instanceof Node) {
       node.appendChild(child);
     }
   };
-
   append(children);
   return node;
 };
 
-/**
- * Форматирование даты (ISO 8601 → dd.mm.yyyy)
- */
+const svgEl = (tag, attrs = {}, children = []) => {
+  const NS = 'http://www.w3.org/2000/svg';
+  const node = document.createElementNS(NS, tag);
+  Object.entries(attrs).forEach(([k, v]) => node.setAttribute(k, v));
+  (Array.isArray(children) ? children : [children]).forEach((c) => {
+    if (c instanceof Node) node.appendChild(c);
+  });
+  return node;
+};
+
+const clear = (node) => { while (node.firstChild) node.removeChild(node.firstChild); };
+
 const formatDate = (iso) => {
   if (!iso) return '—';
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '—';
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const yyyy = d.getFullYear();
-  return `${dd}.${mm}.${yyyy}`;
+  return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
 };
 
-/**
- * Форматирование даты и времени
- */
 const formatDateTime = (iso) => {
   if (!iso) return '—';
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '—';
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mi = String(d.getMinutes()).padStart(2, '0');
-  return `${formatDate(iso)}, ${hh}:${mi}`;
+  return `${formatDate(iso)}, ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 };
 
-/**
- * Экранирование не нужно — используем только textContent
- */
-
-/**
- * Дебаунс (для валидации в реальном времени — требование 5.3)
- */
 const debounce = (fn, delay = 300) => {
   let t;
-  return (...args) => {
-    clearTimeout(t);
-    t = setTimeout(() => fn(...args), delay);
-  };
-};
-
-/**
- * Форматирование ФИО пациента по ID
- */
-const getPatientName = (id) => {
-  const p = DATA.patients.find((p) => p.id === id);
-  return p ? p.fullName : '—';
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), delay); };
 };
 
 /* ============================================================
-   2. ТЕМА (требования 4.1–4.5)
+   2. ТЕМА
    ============================================================ */
 
 const ThemeManager = {
@@ -123,14 +83,6 @@ const ThemeManager = {
   ACCENT_KEY: 'mis-accent',
 
   init() {
-    this.applyInitial();
-    this.bindEvents();
-    this.watchSystem();
-  },
-
-  applyInitial() {
-    // Тема уже применена в inline-скрипте в head.
-    // Здесь только синхронизируем кнопки и accent.
     const current = document.documentElement.getAttribute('data-theme') || 'light';
     this.updateButtons(current);
 
@@ -140,20 +92,20 @@ const ThemeManager = {
       const input = document.getElementById('accent-color');
       if (input) input.value = savedAccent;
     }
+
+    this.bindEvents();
+    this.watchSystem();
   },
 
   setTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
-    try {
-      localStorage.setItem(this.STORAGE_KEY, theme);
-    } catch (e) {}
+    try { localStorage.setItem(this.STORAGE_KEY, theme); } catch (e) {}
     this.updateButtons(theme);
   },
 
   updateButtons(theme) {
     document.querySelectorAll('[data-theme-value]').forEach((btn) => {
-      const isCurrent = btn.dataset.themeValue === theme;
-      btn.setAttribute('aria-pressed', String(isCurrent));
+      btn.setAttribute('aria-pressed', String(btn.dataset.themeValue === theme));
     });
   },
 
@@ -161,36 +113,21 @@ const ThemeManager = {
     const rgb = this.hexToRgb(hex);
     if (!rgb) return;
     document.documentElement.style.setProperty('--accent', hex);
-    document.documentElement.style.setProperty(
-      '--accent-rgb',
-      `${rgb.r}, ${rgb.g}, ${rgb.b}`
-    );
-    // Производный hover
-    const hover = this.darken(hex, 0.15);
-    document.documentElement.style.setProperty('--accent-hover', hover);
+    document.documentElement.style.setProperty('--accent-rgb', `${rgb.r}, ${rgb.g}, ${rgb.b}`);
+    document.documentElement.style.setProperty('--accent-hover', this.darken(hex, 0.15));
   },
 
   hexToRgb(hex) {
     const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    if (!m) return null;
-    return {
-      r: parseInt(m[1], 16),
-      g: parseInt(m[2], 16),
-      b: parseInt(m[3], 16)
-    };
+    return m ? { r: parseInt(m[1],16), g: parseInt(m[2],16), b: parseInt(m[3],16) } : null;
   },
 
   darken(hex, amount) {
     const rgb = this.hexToRgb(hex);
     if (!rgb) return hex;
-    const clamp = (v) => Math.max(0, Math.min(255, Math.round(v)));
-    const factor = 1 - amount;
-    return (
-      '#' +
-      [rgb.r * factor, rgb.g * factor, rgb.b * factor]
-        .map((v) => clamp(v).toString(16).padStart(2, '0'))
-        .join('')
-    );
+    const f = 1 - amount;
+    const c = (v) => Math.max(0, Math.min(255, Math.round(v * f))).toString(16).padStart(2,'0');
+    return '#' + c(rgb.r) + c(rgb.g) + c(rgb.b);
   },
 
   bindEvents() {
@@ -203,20 +140,15 @@ const ThemeManager = {
 
     const accentInput = document.getElementById('accent-color');
     if (accentInput) {
-      // Валидация + сохранение с дебаунсом
       const handler = debounce((value) => {
         this.applyAccent(value);
-        try {
-          localStorage.setItem(this.ACCENT_KEY, value);
-        } catch (e) {}
+        try { localStorage.setItem(this.ACCENT_KEY, value); } catch (e) {}
       }, 100);
 
       accentInput.addEventListener('input', (e) => handler(e.target.value));
       accentInput.addEventListener('change', (e) => {
         this.applyAccent(e.target.value);
-        try {
-          localStorage.setItem(this.ACCENT_KEY, e.target.value);
-        } catch (e) {}
+        try { localStorage.setItem(this.ACCENT_KEY, e.target.value); } catch (e) {}
         Toast.show('Акцентный цвет обновлён', 'success');
       });
     }
@@ -226,7 +158,6 @@ const ThemeManager = {
     if (!window.matchMedia) return;
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
     mq.addEventListener('change', (e) => {
-      // Переключаем только если пользователь не задал тему вручную
       if (localStorage.getItem(this.STORAGE_KEY)) return;
       this.setTheme(e.matches ? 'dark' : 'light');
     });
@@ -234,7 +165,7 @@ const ThemeManager = {
 };
 
 /* ============================================================
-   3. TOAST-УВЕДОМЛЕНИЯ (требование 5.1)
+   3. TOAST
    ============================================================ */
 
 const Toast = {
@@ -247,150 +178,104 @@ const Toast = {
 
   show(message, type = 'info', duration = 3500) {
     if (!this.container) return;
-
     const id = `toast-${++this.counter}`;
 
-    const icon = el('span', { class: 'toast__icon', 'aria-hidden': 'true' });
-    // Простые SVG-иконки
-    const svgNS = 'http://www.w3.org/2000/svg';
-    const svg = document.createElementNS(svgNS, 'svg');
-    svg.setAttribute('width', '18');
-    svg.setAttribute('height', '18');
-    svg.setAttribute('viewBox', '0 0 24 24');
-    svg.setAttribute('focusable', 'false');
-
-    const path = document.createElementNS(svgNS, 'path');
-    path.setAttribute('stroke', 'currentColor');
-    path.setAttribute('stroke-width', '2');
-    path.setAttribute('fill', 'none');
-    path.setAttribute('stroke-linecap', 'round');
-
-    if (type === 'success') {
-      path.setAttribute('d', 'M5 13l4 4L19 7');
-      svg.style.color = 'var(--success)';
-    } else if (type === 'error') {
-      path.setAttribute('d', 'M6 6l12 12M18 6L6 18');
-      svg.style.color = 'var(--error)';
-    } else if (type === 'warning') {
-      path.setAttribute('d', 'M12 8v5M12 17h.01M10.3 3.9L2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z');
-      svg.style.color = 'var(--warning)';
-    } else {
-      path.setAttribute('d', 'M12 16v-4M12 8h.01M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0z');
-      svg.style.color = 'var(--info)';
-    }
-
-    svg.appendChild(path);
-    icon.appendChild(svg);
+    const iconSvg = this.makeIcon(type);
+    const icon = el('span', { class: 'toast__icon', 'aria-hidden': 'true' }, [iconSvg]);
 
     const msg = el('span', { class: 'toast__message', text: message });
 
     const closeBtn = el('button', {
       type: 'button',
       class: 'toast__close',
-      'aria-label': 'Закрыть уведомление',
-      onclick: () => this.remove(toast)
-    });
-    const closeSvg = document.createElementNS(svgNS, 'svg');
-    closeSvg.setAttribute('width', '14');
-    closeSvg.setAttribute('height', '14');
-    closeSvg.setAttribute('viewBox', '0 0 24 24');
-    closeSvg.setAttribute('aria-hidden', 'true');
-    const closePath = document.createElementNS(svgNS, 'path');
-    closePath.setAttribute('d', 'M6 6l12 12M18 6L6 18');
-    closePath.setAttribute('stroke', 'currentColor');
-    closePath.setAttribute('stroke-width', '2');
-    closePath.setAttribute('stroke-linecap', 'round');
-    closePath.setAttribute('fill', 'none');
-    closeSvg.appendChild(closePath);
-    closeBtn.appendChild(closeSvg);
+      'aria-label': 'Закрыть уведомление'
+    }, [this.makeCloseIcon()]);
 
-    const toast = el(
-      'div',
-      {
-        id,
-        class: `toast toast--${type}`,
-        role: type === 'error' ? 'alert' : 'status'
-      },
-      [icon, msg, closeBtn]
-    );
+    const toast = el('div', {
+      id,
+      class: `toast toast--${type}`,
+      role: type === 'error' ? 'alert' : 'status'
+    }, [icon, msg, closeBtn]);
+
+    closeBtn.addEventListener('click', () => this.remove(toast));
 
     this.container.appendChild(toast);
 
-    if (duration > 0) {
-      setTimeout(() => this.remove(toast), duration);
-    }
+    if (duration > 0) setTimeout(() => this.remove(toast), duration);
+  },
+
+  makeIcon(type) {
+    const svg = svgEl('svg', { width: '18', height: '18', viewBox: '0 0 24 24', 'aria-hidden': 'true', focusable: 'false' });
+    const path = svgEl('path', {
+      stroke: 'currentColor', 'stroke-width': '2', fill: 'none', 'stroke-linecap': 'round'
+    });
+    let color = 'var(--info)';
+    let d = 'M12 16v-4M12 8h.01M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0z';
+    if (type === 'success') { color = 'var(--success)'; d = 'M5 13l4 4L19 7'; }
+    else if (type === 'error') { color = 'var(--error)'; d = 'M6 6l12 12M18 6L6 18'; }
+    else if (type === 'warning') { color = 'var(--warning)'; d = 'M12 8v5M12 17h.01M10.3 3.9L2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z'; }
+    path.setAttribute('d', d);
+    svg.style.color = color;
+    svg.appendChild(path);
+    return svg;
+  },
+
+  makeCloseIcon() {
+    const svg = svgEl('svg', { width: '14', height: '14', viewBox: '0 0 24 24', 'aria-hidden': 'true', focusable: 'false' });
+    const path = svgEl('path', {
+      d: 'M6 6l12 12M18 6L6 18',
+      stroke: 'currentColor', 'stroke-width': '2', fill: 'none', 'stroke-linecap': 'round'
+    });
+    svg.appendChild(path);
+    return svg;
   },
 
   remove(toast) {
     if (!toast || !toast.parentNode) return;
     toast.classList.add('toast--removing');
-    toast.addEventListener(
-      'animationend',
-      () => {
-        toast.remove();
-      },
-      { once: true }
-    );
+    toast.addEventListener('animationend', () => toast.remove(), { once: true });
   }
 };
 
 /* ============================================================
-   4. МОДАЛЬНОЕ ОКНО + FOCUS TRAP (требования 2.5, 5.1)
+   4. МОДАЛЬНОЕ ОКНО + FOCUS TRAP
    ============================================================ */
 
 const Modal = {
-  root: null,
-  dialog: null,
-  titleEl: null,
-  bodyEl: null,
-  footerEl: null,
+  root: null, dialog: null, titleEl: null, bodyEl: null, footerEl: null,
   lastFocused: null,
-  focusableSelector:
-    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  FOCUSABLE: 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
 
   init() {
     this.root = document.getElementById('modal');
+    if (!this.root) return;
     this.dialog = this.root.querySelector('.modal__dialog');
     this.titleEl = document.getElementById('modal-title');
     this.bodyEl = document.getElementById('modal-body');
     this.footerEl = document.getElementById('modal-footer');
 
-    // Делегирование: закрытие по клику на data-modal-close
     this.root.addEventListener('click', (e) => {
-      const target = e.target.closest('[data-modal-close]');
-      if (target) this.close();
+      if (e.target.closest('[data-modal-close]')) this.close();
     });
 
-    // Escape + focus trap
     document.addEventListener('keydown', (e) => {
       if (this.root.hidden) return;
-
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        this.close();
-        return;
-      }
-
-      if (e.key === 'Tab') {
-        this.trapFocus(e);
-      }
+      if (e.key === 'Escape') { e.preventDefault(); this.close(); return; }
+      if (e.key === 'Tab') this.trapFocus(e);
     });
   },
 
   open({ title, body, footer }) {
     this.lastFocused = document.activeElement;
-
     this.titleEl.textContent = title || '';
 
-    // Очищаем без innerHTML
-    while (this.bodyEl.firstChild) this.bodyEl.removeChild(this.bodyEl.firstChild);
-    while (this.footerEl.firstChild) this.footerEl.removeChild(this.footerEl.firstChild);
+    clear(this.bodyEl);
+    clear(this.footerEl);
 
     if (body) {
       if (Array.isArray(body)) body.forEach((n) => this.bodyEl.appendChild(n));
       else this.bodyEl.appendChild(body);
     }
-
     if (footer) {
       if (Array.isArray(footer)) footer.forEach((n) => this.footerEl.appendChild(n));
       else this.footerEl.appendChild(footer);
@@ -399,50 +284,39 @@ const Modal = {
     this.root.hidden = false;
     document.body.classList.add('modal-open');
 
-    // Фокус на первый focusable элемент
     requestAnimationFrame(() => {
-      const first = this.dialog.querySelector(this.focusableSelector);
+      const first = this.dialog.querySelector(this.FOCUSABLE);
       if (first) first.focus();
-      else this.dialog.setAttribute('tabindex', '-1'), this.dialog.focus();
     });
   },
 
   close() {
     if (this.root.hidden) return;
-
     this.root.hidden = true;
     document.body.classList.remove('modal-open');
-
-    // Возврат фокуса
     if (this.lastFocused && typeof this.lastFocused.focus === 'function') {
       this.lastFocused.focus();
     }
   },
 
   trapFocus(e) {
-    const focusable = Array.from(this.dialog.querySelectorAll(this.focusableSelector))
-      .filter((node) => !node.hasAttribute('disabled') && node.offsetParent !== null);
-
-    if (focusable.length === 0) {
-      e.preventDefault();
-      return;
-    }
+    const focusable = Array.from(this.dialog.querySelectorAll(this.FOCUSABLE))
+      .filter((n) => !n.hasAttribute('disabled') && n.offsetParent !== null);
+    if (focusable.length === 0) { e.preventDefault(); return; }
 
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
 
     if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault();
-      last.focus();
+      e.preventDefault(); last.focus();
     } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault();
-      first.focus();
+      e.preventDefault(); first.focus();
     }
   }
 };
 
 /* ============================================================
-   5. ТАБЫ (требование 5.1)
+   5. ТАБЫ
    ============================================================ */
 
 const Tabs = {
@@ -450,51 +324,41 @@ const Tabs = {
     document.querySelectorAll('[data-tabs]').forEach((root) => {
       const tablist = root.querySelector('[role="tablist"]');
       if (!tablist) return;
-
       const tabs = Array.from(tablist.querySelectorAll('[role="tab"]'));
-      const panels = tabs.map((tab) =>
-        document.getElementById(tab.getAttribute('aria-controls'))
-      );
+      const panels = tabs.map((t) => document.getElementById(t.getAttribute('aria-controls')));
 
       const activate = (index, focus = true) => {
         tabs.forEach((tab, i) => {
-          const selected = i === index;
-          tab.setAttribute('aria-selected', String(selected));
-          tab.setAttribute('tabindex', selected ? '0' : '-1');
-          if (panels[i]) panels[i].hidden = !selected;
+          const sel = i === index;
+          tab.setAttribute('aria-selected', String(sel));
+          tab.setAttribute('tabindex', sel ? '0' : '-1');
+          if (panels[i]) panels[i].hidden = !sel;
         });
         if (focus) tabs[index].focus();
       };
 
-      // Клик
-      tabs.forEach((tab, i) => {
-        tab.addEventListener('click', () => activate(i, false));
-      });
+      tabs.forEach((tab, i) => tab.addEventListener('click', () => activate(i, false)));
 
-      // Клавиатура
       tablist.addEventListener('keydown', (e) => {
-        const currentIndex = tabs.indexOf(document.activeElement);
-        if (currentIndex === -1) return;
-
-        let next = currentIndex;
-        if (e.key === 'ArrowRight') next = (currentIndex + 1) % tabs.length;
-        else if (e.key === 'ArrowLeft') next = (currentIndex - 1 + tabs.length) % tabs.length;
+        const cur = tabs.indexOf(document.activeElement);
+        if (cur === -1) return;
+        let next = cur;
+        if (e.key === 'ArrowRight') next = (cur + 1) % tabs.length;
+        else if (e.key === 'ArrowLeft') next = (cur - 1 + tabs.length) % tabs.length;
         else if (e.key === 'Home') next = 0;
         else if (e.key === 'End') next = tabs.length - 1;
         else return;
-
         e.preventDefault();
         activate(next);
       });
 
-      // Активируем первый
       activate(0, false);
     });
   }
 };
 
 /* ============================================================
-   6. АККОРДЕОН (требование 5.1)
+   6. АККОРДЕОН
    ============================================================ */
 
 const Accordion = {
@@ -503,11 +367,8 @@ const Accordion = {
       root.addEventListener('click', (e) => {
         const trigger = e.target.closest('.accordion__trigger');
         if (!trigger) return;
-
         const expanded = trigger.getAttribute('aria-expanded') === 'true';
-        const panelId = trigger.getAttribute('aria-controls');
-        const panel = document.getElementById(panelId);
-
+        const panel = document.getElementById(trigger.getAttribute('aria-controls'));
         trigger.setAttribute('aria-expanded', String(!expanded));
         if (panel) panel.hidden = expanded;
       });
@@ -516,12 +377,14 @@ const Accordion = {
 };
 
 /* ============================================================
-   7. DROPDOWN-МЕНЮ (требование 5.1)
+   7. DROPDOWN
    ============================================================ */
 
 const Dropdown = {
   init() {
-    document.querySelectorAll('[data-dropdown]').forEach((root) => {
+    const dropdowns = document.querySelectorAll('[data-dropdown]');
+
+    dropdowns.forEach((root) => {
       const toggle = root.querySelector('.dropdown__toggle');
       const menu = root.querySelector('.dropdown__menu');
       if (!toggle || !menu) return;
@@ -529,6 +392,15 @@ const Dropdown = {
       const items = () => Array.from(menu.querySelectorAll('[role="menuitem"]'));
 
       const open = () => {
+        // Закрыть другие
+        dropdowns.forEach((d) => {
+          if (d !== root) {
+            const m = d.querySelector('.dropdown__menu');
+            const t = d.querySelector('.dropdown__toggle');
+            if (m) m.hidden = true;
+            if (t) t.setAttribute('aria-expanded', 'false');
+          }
+        });
         menu.hidden = false;
         toggle.setAttribute('aria-expanded', 'true');
         const first = items()[0];
@@ -541,56 +413,33 @@ const Dropdown = {
         if (returnFocus) toggle.focus();
       };
 
-      const isOpen = () => !menu.hidden;
+      toggle.addEventListener('click', () => (menu.hidden ? open() : close()));
 
-      toggle.addEventListener('click', () => {
-        if (isOpen()) close();
-        else open();
-      });
-
-      // Навигация стрелками
       menu.addEventListener('keydown', (e) => {
         const list = items();
         const idx = list.indexOf(document.activeElement);
-
-        if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          list[(idx + 1) % list.length]?.focus();
-        } else if (e.key === 'ArrowUp') {
-          e.preventDefault();
-          list[(idx - 1 + list.length) % list.length]?.focus();
-        } else if (e.key === 'Home') {
-          e.preventDefault();
-          list[0]?.focus();
-        } else if (e.key === 'End') {
-          e.preventDefault();
-          list[list.length - 1]?.focus();
-        } else if (e.key === 'Escape') {
-          e.preventDefault();
-          close();
-        }
+        if (e.key === 'ArrowDown') { e.preventDefault(); list[(idx+1)%list.length]?.focus(); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); list[(idx-1+list.length)%list.length]?.focus(); }
+        else if (e.key === 'Home') { e.preventDefault(); list[0]?.focus(); }
+        else if (e.key === 'End') { e.preventDefault(); list[list.length-1]?.focus(); }
+        else if (e.key === 'Escape') { e.preventDefault(); close(); }
       });
 
-      // Закрытие по клику вне
       document.addEventListener('click', (e) => {
-        if (!isOpen()) return;
-        if (!root.contains(e.target)) close(false);
+        if (!menu.hidden && !root.contains(e.target)) close(false);
       });
 
-      // Закрытие по клику на пункт
       menu.addEventListener('click', (e) => {
-        const item = e.target.closest('[role="menuitem"]');
-        if (item) close();
+        if (e.target.closest('[role="menuitem"]')) close();
       });
     });
 
-    // Глобальный Escape
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
-      document.querySelectorAll('[data-dropdown]').forEach((root) => {
-        const toggle = root.querySelector('.dropdown__toggle');
+      dropdowns.forEach((root) => {
         const menu = root.querySelector('.dropdown__menu');
-        if (!menu.hidden) {
+        const toggle = root.querySelector('.dropdown__toggle');
+        if (menu && !menu.hidden) {
           menu.hidden = true;
           toggle.setAttribute('aria-expanded', 'false');
         }
@@ -600,15 +449,14 @@ const Dropdown = {
 };
 
 /* ============================================================
-   8. ПАГИНАЦИЯ (требование 5.1)
+   8. ПАГИНАЦИЯ
    ============================================================ */
 
 const Pagination = {
   ITEMS_PER_PAGE: 6,
 
   render(container, totalItems, currentPage, onChange) {
-    while (container.firstChild) container.removeChild(container.firstChild);
-
+    clear(container);
     const totalPages = Math.max(1, Math.ceil(totalItems / this.ITEMS_PER_PAGE));
     if (totalPages <= 1) return;
 
@@ -618,44 +466,32 @@ const Pagination = {
         class: 'pagination__btn',
         'aria-label': opts.ariaLabel || `Страница ${page}`,
         text: label,
-        disabled: opts.disabled || false
+        disabled: !!opts.disabled
       });
       if (opts.current) btn.setAttribute('aria-current', 'page');
       btn.addEventListener('click', () => onChange(page));
       return btn;
     };
 
-    container.appendChild(
-      makeBtn('‹', currentPage - 1, {
-        ariaLabel: 'Предыдущая страница',
-        disabled: currentPage === 1
-      })
-    );
+    container.appendChild(makeBtn('‹', currentPage - 1, {
+      ariaLabel: 'Предыдущая страница', disabled: currentPage === 1
+    }));
 
-    const pages = this.getPages(currentPage, totalPages);
-    pages.forEach((p) => {
-      if (p === '…') {
-        container.appendChild(el('span', { class: 'pagination__ellipsis', text: '…' }));
-      } else {
-        container.appendChild(makeBtn(String(p), p, { current: p === currentPage }));
-      }
+    this.getPages(currentPage, totalPages).forEach((p) => {
+      if (p === '…') container.appendChild(el('span', { class: 'pagination__ellipsis', text: '…' }));
+      else container.appendChild(makeBtn(String(p), p, { current: p === currentPage }));
     });
 
-    container.appendChild(
-      makeBtn('›', currentPage + 1, {
-        ariaLabel: 'Следующая страница',
-        disabled: currentPage === totalPages
-      })
-    );
+    container.appendChild(makeBtn('›', currentPage + 1, {
+      ariaLabel: 'Следующая страница', disabled: currentPage === totalPages
+    }));
   },
 
   getPages(current, total) {
     const pages = [];
     const delta = 1;
     const range = [];
-    for (let i = Math.max(2, current - delta); i <= Math.min(total - 1, current + delta); i++) {
-      range.push(i);
-    }
+    for (let i = Math.max(2, current - delta); i <= Math.min(total - 1, current + delta); i++) range.push(i);
     if (current - delta > 2) range.unshift('…');
     if (current + delta < total - 1) range.push('…');
     pages.push(1, ...range, total);
@@ -664,15 +500,14 @@ const Pagination = {
 };
 
 /* ============================================================
-   9. ВАЛИДАЦИЯ ФОРМ (требование 5.3)
+   9. ВАЛИДАЦИЯ
    ============================================================ */
 
 const Validator = {
   rules: {
     required: (v) => (v && v.trim().length > 0) || 'Поле обязательно для заполнения',
     email: (v) => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) || 'Введите корректный email',
-    phone: (v) =>
-      !v || /^\+?[\d\s\-()]{10,}$/.test(v) || 'Введите корректный номер телефона',
+    phone: (v) => !v || /^\+?[\d\s\-()]{10,}$/.test(v) || 'Введите корректный номер телефона',
     minLength: (n) => (v) => !v || v.trim().length >= n || `Минимум ${n} символов`,
     maxLength: (n) => (v) => !v || v.trim().length <= n || `Максимум ${n} символов`
   },
@@ -680,21 +515,13 @@ const Validator = {
   validateField(input) {
     const rules = (input.dataset.validate || '').split('|').filter(Boolean);
     const value = input.value;
-
     for (const rule of rules) {
       const [name, param] = rule.split(':');
       let fn = this.rules[name];
       if (!fn) continue;
-
-      if (param !== undefined) {
-        const n = Number(param);
-        fn = fn(n);
-      }
-
+      if (param !== undefined) fn = fn(Number(param));
       const result = fn(value);
-      if (result !== true) {
-        return result;
-      }
+      if (result !== true) return result;
     }
     return '';
   },
@@ -702,16 +529,10 @@ const Validator = {
   setFieldError(input, message) {
     const errorId = `${input.id}-error`;
     let errorEl = document.getElementById(errorId);
-
     if (!errorEl) {
-      errorEl = el('span', {
-        id: errorId,
-        class: 'field__error',
-        role: 'alert'
-      });
+      errorEl = el('span', { id: errorId, class: 'field__error', role: 'alert' });
       input.parentNode.appendChild(errorEl);
     }
-
     if (message) {
       errorEl.textContent = message;
       input.setAttribute('aria-invalid', 'true');
@@ -723,281 +544,178 @@ const Validator = {
     }
   },
 
-  /**
-   * Навешивает валидацию в реальном времени (blur + input с debounce)
-   */
   attach(form) {
-    const inputs = form.querySelectorAll('[data-validate]');
-
-    inputs.forEach((input) => {
-      // Валидация при потере фокуса
+    form.querySelectorAll('[data-validate]').forEach((input) => {
       input.addEventListener('blur', () => {
-        const msg = this.validateField(input);
-        this.setFieldError(input, msg);
+        this.setFieldError(input, this.validateField(input));
       });
-
-      // Валидация при вводе с задержкой
-      const debouncedValidate = debounce(() => {
-        // Валидируем только если уже была ошибка или поле непустое
+      const debounced = debounce(() => {
         if (input.value.length > 0 || input.getAttribute('aria-invalid') === 'true') {
-          const msg = this.validateField(input);
-          this.setFieldError(input, msg);
+          this.setFieldError(input, this.validateField(input));
         }
       }, 400);
-
-      input.addEventListener('input', debouncedValidate);
+      input.addEventListener('input', debounced);
     });
   },
 
-  /**
-   * Проверка всей формы. Возвращает true, если всё валидно.
-   */
   validateForm(form) {
-    const inputs = form.querySelectorAll('[data-validate]');
     let valid = true;
     let firstInvalid = null;
-
-    inputs.forEach((input) => {
+    form.querySelectorAll('[data-validate]').forEach((input) => {
       const msg = this.validateField(input);
       this.setFieldError(input, msg);
-      if (msg) {
-        valid = false;
-        if (!firstInvalid) firstInvalid = input;
-      }
+      if (msg) { valid = false; if (!firstInvalid) firstInvalid = input; }
     });
-
     if (firstInvalid) firstInvalid.focus();
     return valid;
   }
 };
 
 /* ============================================================
-   10. РЕНДЕР ДАННЫХ (требование 1.4)
+   10. РЕНДЕР
    ============================================================ */
 
 const Renderer = {
-  /* ---------- Пациенты ---------- */
+  patientCard(p) {
+    const card = el('article', { class: 'card', dataset: { id: p.id } });
 
-  patientCard(patient, onOpen) {
-    const card = el('article', { class: 'card', dataset: { id: patient.id } });
+    card.appendChild(el('header', { class: 'card__header' }, [
+      el('div', {}, [
+        el('h3', { class: 'card__title', text: p.fullName }),
+        el('p', { class: 'card__subtitle', text: `ID: ${p.id}` })
+      ]),
+      el('span', { class: `badge badge--${p.status}`, text: LABELS.patientStatus[p.status] || p.status })
+    ]));
 
-    card.appendChild(
-      el('header', { class: 'card__header' }, [
-        el('div', {}, [
-          el('h3', { class: 'card__title', text: patient.fullName }),
-          el('p', { class: 'card__subtitle', text: `ID: ${patient.id}` })
-        ]),
-        el('span', {
-          class: `badge badge--${patient.status}`,
-          text: LABELS.patientStatus[patient.status] || patient.status
-        })
-      ])
-    );
-
-    card.appendChild(
-      el('div', { class: 'card__body' }, [
-        el('p', {}, [el('strong', { text: 'Пол: ' }), patient.gender === 'male' ? 'Мужской' : 'Женский']),
-        el('p', {}, [el('strong', { text: 'Телефон: ' }), patient.phone]),
-        el('p', {}, [el('strong', { text: 'Email: ' }), patient.email]),
-        el('p', {}, [el('strong', { text: 'Полис: ' }), patient.insurance]),
-        el('p', {}, [el('strong', { text: 'Группа крови: ' }), patient.bloodType])
-      ])
-    );
+    card.appendChild(el('div', { class: 'card__body' }, [
+      el('p', {}, [el('strong', { text: 'Пол: ' }), p.gender === 'male' ? 'Мужской' : 'Женский']),
+      el('p', {}, [el('strong', { text: 'Телефон: ' }), p.phone]),
+      el('p', {}, [el('strong', { text: 'Email: ' }), p.email]),
+      el('p', {}, [el('strong', { text: 'Полис: ' }), p.insurance]),
+      el('p', {}, [el('strong', { text: 'Кровь: ' }), p.bloodType])
+    ]));
 
     const meta = el('div', { class: 'card__meta' });
-
-    // Дата рождения через <time>
-    const timeBirth = el('time', {
-      datetime: patient.birthDate,
-      text: formatDate(patient.birthDate)
-    });
-    meta.appendChild(el('span', {}, ['Д.р.: ', timeBirth]));
-
-    // Аллергии
-    if (patient.allergies.length > 0) {
-      patient.allergies.forEach((a) => {
-        meta.appendChild(el('span', { class: 'tag', text: `⚠ ${a}` }));
-      });
+    meta.appendChild(el('span', {}, ['Д.р.: ', el('time', { datetime: p.birthDate, text: formatDate(p.birthDate) })]));
+    if (Array.isArray(p.allergies)) {
+      p.allergies.forEach((a) => meta.appendChild(el('span', { class: 'tag', text: `⚠ ${a}` })));
     }
-
     card.appendChild(meta);
 
-    // Кнопка открытия
-    card.appendChild(
-      el('div', { class: 'card__actions' }, [
-        el('button', {
-          type: 'button',
-          class: 'btn btn--outline',
-          'aria-label': `Подробнее о пациенте ${patient.fullName}`,
-          text: 'Подробнее',
-          'data-action': 'open-patient',
-          'data-id': patient.id
-        })
-      ])
-    );
+    card.appendChild(el('div', { class: 'card__actions' }, [
+      el('button', {
+        type: 'button',
+        class: 'btn btn--outline',
+        'aria-label': `Подробнее о пациенте ${p.fullName}`,
+        text: 'Подробнее',
+        'data-action': 'open-patient',
+        'data-id': p.id
+      })
+    ]));
 
     return card;
   },
 
-  /* ---------- Приёмы ---------- */
+  appointmentCard(a) {
+    const card = el('article', { class: 'card', dataset: { id: a.id } });
+    card.appendChild(el('header', { class: 'card__header' }, [
+      el('div', {}, [
+        el('h3', { class: 'card__title', text: `${a.doctorName} — ${a.specialty}` }),
+        el('p', { class: 'card__subtitle', text: `Пациент: ${a.patientName}` })
+      ]),
+      el('span', { class: `badge badge--${a.status}`, text: LABELS.appointmentStatus[a.status] || a.status })
+    ]));
 
-  appointmentCard(appt) {
-    const card = el('article', { class: 'card', dataset: { id: appt.id } });
-
-    card.appendChild(
-      el('header', { class: 'card__header' }, [
-        el('div', {}, [
-          el('h3', { class: 'card__title', text: `${appt.doctorName} — ${appt.specialty}` }),
-          el('p', { class: 'card__subtitle', text: `Пациент: ${appt.patientName}` })
-        ]),
-        el('span', {
-          class: `badge badge--${appt.status}`,
-          text: LABELS.appointmentStatus[appt.status] || appt.status
-        })
-      ])
-    );
-
-    const time = el('time', {
-      datetime: appt.date,
-      text: formatDateTime(appt.date)
-    });
-
-    card.appendChild(
-      el('div', { class: 'card__body' }, [
-        el('p', {}, [el('strong', { text: 'Дата: ' }), time]),
-        el('p', {}, [el('strong', { text: 'Кабинет: ' }), appt.room]),
-        el('p', {}, [el('strong', { text: 'Длительность: ' }), `${appt.duration} мин`]),
-        el('p', {}, [el('strong', { text: 'Причина: ' }), appt.reason])
-      ])
-    );
+    card.appendChild(el('div', { class: 'card__body' }, [
+      el('p', {}, [el('strong', { text: 'Дата: ' }), el('time', { datetime: a.date, text: formatDateTime(a.date) })]),
+      el('p', {}, [el('strong', { text: 'Кабинет: ' }), a.room]),
+      el('p', {}, [el('strong', { text: 'Длительность: ' }), `${a.duration} мин`]),
+      el('p', {}, [el('strong', { text: 'Причина: ' }), a.reason])
+    ]));
 
     return card;
   },
 
-  /* ---------- Диагнозы ---------- */
-
-  diagnosisCard(diag) {
-    const card = el('article', { class: 'card', dataset: { id: diag.id } });
-
-    card.appendChild(
-      el('header', { class: 'card__header' }, [
-        el('div', {}, [
-          el('h3', { class: 'card__title', text: diag.title }),
-          el('p', { class: 'card__subtitle', text: `МКБ-10: ${diag.code}` })
-        ]),
-        el('span', {
-          class: `badge badge--${diag.status === 'active' ? 'error' : 'completed'}`,
-          text: LABELS.diagnosisStatus[diag.status] || diag.status
-        })
-      ])
-    );
-
-    const time = el('time', {
-      datetime: diag.diagnosedAt,
-      text: formatDate(diag.diagnosedAt)
-    });
+  diagnosisCard(d) {
+    const card = el('article', { class: 'card', dataset: { id: d.id } });
+    card.appendChild(el('header', { class: 'card__header' }, [
+      el('div', {}, [
+        el('h3', { class: 'card__title', text: d.title }),
+        el('p', { class: 'card__subtitle', text: `МКБ-10: ${d.code}` })
+      ]),
+      el('span', {
+        class: `badge badge--${d.status === 'active' ? 'error' : 'completed'}`,
+        text: LABELS.diagnosisStatus[d.status] || d.status
+      })
+    ]));
 
     const body = el('div', { class: 'card__body' }, [
-      el('p', { text: diag.description }),
-      el('p', {}, [el('strong', { text: 'Пациент: ' }), diag.patientName]),
-      el('p', {}, [el('strong', { text: 'Врач: ' }), diag.doctorName]),
-      el('p', {}, [el('strong', { text: 'Дата: ' }), time])
+      el('p', { text: d.description }),
+      el('p', {}, [el('strong', { text: 'Пациент: ' }), d.patientName]),
+      el('p', {}, [el('strong', { text: 'Врач: ' }), d.doctorName]),
+      el('p', {}, [el('strong', { text: 'Дата: ' }), el('time', { datetime: d.diagnosedAt, text: formatDate(d.diagnosedAt) })])
     ]);
 
-    if (diag.symptoms && diag.symptoms.length > 0) {
+    if (Array.isArray(d.symptoms) && d.symptoms.length > 0) {
       const sym = el('p', {}, [el('strong', { text: 'Симптомы: ' })]);
-      diag.symptoms.forEach((s, i) => {
+      d.symptoms.forEach((s, i) => {
         if (i > 0) sym.appendChild(document.createTextNode(', '));
         sym.appendChild(el('span', { class: 'tag', text: s }));
       });
       body.appendChild(sym);
     }
-
     card.appendChild(body);
 
-    // Приоритет-индикатор по тяжести
-    const priorityClass = diag.severity === 'severe'
-      ? 'priority--high'
-      : diag.severity === 'moderate'
-      ? 'priority--medium'
-      : 'priority--low';
+    const priorityClass = d.severity === 'severe' ? 'priority--high'
+      : d.severity === 'moderate' ? 'priority--medium' : 'priority--low';
 
-    card.appendChild(
-      el('div', { class: 'card__meta' }, [
-        el('span', {
-          class: `priority ${priorityClass}`,
-          text: `Тяжесть: ${LABELS.diagnosisSeverity[diag.severity]}`
-        })
-      ])
-    );
+    card.appendChild(el('div', { class: 'card__meta' }, [
+      el('span', { class: `priority ${priorityClass}`, text: `Тяжесть: ${LABELS.diagnosisSeverity[d.severity]}` })
+    ]));
 
     return card;
   },
 
-  /* ---------- Назначения ---------- */
-
-  prescriptionCard(rx) {
-    const card = el('article', { class: 'card', dataset: { id: rx.id } });
-
-    card.appendChild(
-      el('header', { class: 'card__header' }, [
-        el('div', {}, [
-          el('h3', { class: 'card__title', text: rx.title }),
-          el('p', { class: 'card__subtitle', text: `${LABELS.prescriptionType[rx.type]} · ${rx.patientName}` })
-        ]),
-        el('span', {
-          class: `badge badge--${rx.status}`,
-          text: LABELS.prescriptionStatus[rx.status] || rx.status
-        })
-      ])
-    );
+  prescriptionCard(r) {
+    const card = el('article', { class: 'card', dataset: { id: r.id } });
+    card.appendChild(el('header', { class: 'card__header' }, [
+      el('div', {}, [
+        el('h3', { class: 'card__title', text: r.title }),
+        el('p', { class: 'card__subtitle', text: `${LABELS.prescriptionType[r.type]} · ${r.patientName}` })
+      ]),
+      el('span', { class: `badge badge--${r.status}`, text: LABELS.prescriptionStatus[r.status] || r.status })
+    ]));
 
     const body = el('div', { class: 'card__body' }, [
-      el('p', { text: rx.description }),
-      el('p', {}, [el('strong', { text: 'Врач: ' }), rx.doctorName])
+      el('p', { text: r.description }),
+      el('p', {}, [el('strong', { text: 'Врач: ' }), r.doctorName])
     ]);
 
-    if (rx.medications && rx.medications.length > 0) {
-      rx.medications.forEach((m) => {
-        body.appendChild(
-          el('p', {}, [
-            el('strong', { text: `${m.name}: ` }),
-            `${m.dose}, ${m.frequency}, ${m.duration}`
-          ])
-        );
+    if (Array.isArray(r.medications) && r.medications.length > 0) {
+      r.medications.forEach((m) => {
+        body.appendChild(el('p', {}, [
+          el('strong', { text: `${m.name}: ` }),
+          `${m.dose}, ${m.frequency}, ${m.duration}`
+        ]));
       });
     }
-
-    body.appendChild(el('p', { text: rx.instructions }));
-
+    if (r.instructions) body.appendChild(el('p', { text: r.instructions }));
     card.appendChild(body);
 
-    // Приоритет
-    const priorityClass = 'priority--' + (rx.priority === 'high' ? 'high' : rx.priority === 'medium' ? 'medium' : 'low');
+    const priorityClass = 'priority--' + (r.priority === 'high' ? 'high' : r.priority === 'medium' ? 'medium' : 'low');
 
-    card.appendChild(
-      el('div', { class: 'card__meta' }, [
-        el('time', {
-          datetime: rx.prescribedAt,
-          text: `Назначено: ${formatDate(rx.prescribedAt)}`
-        }),
-        el('span', {
-          class: `priority ${priorityClass}`,
-          text: `Приоритет: ${LABELS.prescriptionPriority[rx.priority]}`
-        })
-      ])
-    );
+    card.appendChild(el('div', { class: 'card__meta' }, [
+      el('time', { datetime: r.prescribedAt, text: `Назначено: ${formatDate(r.prescribedAt)}` }),
+      el('span', { class: `priority ${priorityClass}`, text: `Приоритет: ${LABELS.prescriptionPriority[r.priority]}` })
+    ]));
 
     return card;
   },
 
-  /* ---------- Таблица пациентов (для переключателя вида) ---------- */
-
   patientsTable(items) {
-    const wrap = el('div', { class     const wrap = el('div', { class: 'table-wrap' });
-
+    const wrap = el('div', { class: 'table-wrap' });
     const table = el('table');
-    const caption = el('caption', { text: 'Список пациентов' });
+    table.appendChild(el('caption', { text: 'Список пациентов' }));
 
     const thead = el('thead');
     const headRow = el('tr');
@@ -1009,15 +727,7 @@ const Renderer = {
       { key: 'phone', label: 'Телефон' },
       { key: 'bloodType', label: 'Кровь' }
     ];
-
-    columns.forEach((col) => {
-      const th = el('th', {
-        scope: 'col',
-        'data-key': col.key,
-        text: col.label
-      });
-      headRow.appendChild(th);
-    });
+    columns.forEach((col) => headRow.appendChild(el('th', { scope: 'col', 'data-key': col.key, text: col.label })));
     thead.appendChild(headRow);
 
     const tbody = el('tbody');
@@ -1026,48 +736,43 @@ const Renderer = {
       tr.appendChild(el('th', { scope: 'row', 'data-label': 'Пациент', text: p.fullName }));
       tr.appendChild(el('td', { 'data-label': 'ID', text: p.id }));
       tr.appendChild(el('td', { 'data-label': 'Статус' }, [
-        el('span', {
-          class: `badge badge--${p.status}`,
-          text: LABELS.patientStatus[p.status] || p.status
-        })
+        el('span', { class: `badge badge--${p.status}`, text: LABELS.patientStatus[p.status] || p.status })
       ]));
-      tr.appendChild(el('td', {
-        'data-label': 'Пол',
-        text: p.gender === 'male' ? 'Мужской' : 'Женский'
-      }));
+      tr.appendChild(el('td', { 'data-label': 'Пол', text: p.gender === 'male' ? 'Мужской' : 'Женский' }));
       tr.appendChild(el('td', { 'data-label': 'Телефон', text: p.phone }));
       tr.appendChild(el('td', { 'data-label': 'Кровь', text: p.bloodType }));
       tbody.appendChild(tr);
     });
 
-    table.appendChild(caption);
     table.appendChild(thead);
-    table.appendChild(tbody);
+    table     table.appendChild(tbody);
     wrap.appendChild(table);
-
     return wrap;
   },
 
-  /* ---------- Состояния ---------- */
-
-  skeleton(rows = 3) {
+  skeleton(rows = 6) {
     const grid = el('div', { class: 'cards-grid' });
     for (let i = 0; i < rows; i++) {
       const card = el('div', { class: 'card' });
-      card.appendChild(
-        el('div', { class: 'card__header' }, [
-          el('div', { style: 'flex: 1;' }, [
-            el('div', { class: 'skeleton skeleton-line skeleton-line--title' }),
-            el('div', { class: 'skeleton skeleton-line skeleton-line--short' })
-          ]),
-          el('div', { class: 'skeleton', style: 'width: 80px; height: 24px; border-radius: 9999px;' })
-        ])
-      );
+      const header = el('div', { class: 'card__header' }, [
+        el('div', { style: 'flex: 1;' }, [
+          el('div', { class: 'skeleton skeleton-line skeleton-line--title' }),
+          el('div', { class: 'skeleton skeleton-line skeleton-line--short' })
+        ]),
+        el('div', { class: 'skeleton', style: 'width: 80px; height: 24px; border-radius: 9999px;' })
+      ]);
+      card.appendChild(header);
+
       const body = el('div', { class: 'card__body' });
       for (let j = 0; j < 3; j++) {
         body.appendChild(el('div', { class: 'skeleton skeleton-line skeleton-line--medium' }));
       }
       card.appendChild(body);
+
+      const meta = el('div', { class: 'card__meta' });
+      meta.appendChild(el('div', { class: 'skeleton skeleton-line skeleton-line--short', style: 'width: 30%;' }));
+      card.appendChild(meta);
+
       grid.appendChild(card);
     }
     return grid;
@@ -1076,19 +781,17 @@ const Renderer = {
   emptyState({ title, text, actionLabel, onAction }) {
     const wrap = el('div', { class: 'empty-state' });
 
-    const svgNS = 'http://www.w3.org/2000/svg';
-    const svg = document.createElementNS(svgNS, 'svg');
-    svg.setAttribute('width', '64');
-    svg.setAttribute('height', '64');
-    svg.setAttribute('viewBox', '0 0 24 24');
-    svg.setAttribute('aria-hidden', 'true');
-    svg.setAttribute('focusable', 'false');
-    const path = document.createElementNS(svgNS, 'path');
-    path.setAttribute('d', 'M9 12h6M9 16h6M9 8h6M5 3h14a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z');
-    path.setAttribute('stroke', 'currentColor');
-    path.setAttribute('stroke-width', '1.5');
-    path.setAttribute('fill', 'none');
-    path.setAttribute('stroke-linecap', 'round');
+    const svg = svgEl('svg', {
+      width: '64', height: '64', viewBox: '0 0 24 24',
+      'aria-hidden': 'true', focusable: 'false'
+    });
+    const path = svgEl('path', {
+      d: 'M9 12h6M9 16h6M9 8h6M5 3h14a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z',
+      stroke: 'currentColor',
+      'stroke-width': '1.5',
+      fill: 'none',
+      'stroke-linecap': 'round'
+    });
     svg.appendChild(path);
     wrap.appendChild(svg);
 
@@ -1096,14 +799,13 @@ const Renderer = {
     if (text) wrap.appendChild(el('p', { class: 'empty-state__text', text }));
 
     if (actionLabel && typeof onAction === 'function') {
-      wrap.appendChild(
-        el('button', {
-          type: 'button',
-          class: 'btn btn--primary',
-          text: actionLabel,
-          onclick: onAction
-        })
-      );
+      const btn = el('button', {
+        type: 'button',
+        class: 'btn btn--primary',
+        text: actionLabel
+      });
+      btn.addEventListener('click', onAction);
+      wrap.appendChild(btn);
     }
 
     return wrap;
@@ -1118,7 +820,7 @@ const Renderer = {
 };
 
 /* ============================================================
-   11. МОБИЛЬНОЕ МЕНЮ (требование 3.2)
+   11. МОБИЛЬНОЕ МЕНЮ
    ============================================================ */
 
 const MobileMenu = {
@@ -1131,7 +833,6 @@ const MobileMenu = {
     const open = () => {
       sidebar.classList.add('is-open');
       overlay.hidden = false;
-      // Форсируем reflow, чтобы сработала transition
       void overlay.offsetWidth;
       overlay.classList.add('is-visible');
       hamburger.setAttribute('aria-expanded', 'true');
@@ -1145,32 +846,22 @@ const MobileMenu = {
       hamburger.setAttribute('aria-expanded', 'false');
       hamburger.setAttribute('aria-label', 'Открыть меню');
       document.body.classList.remove('modal-open');
-
-      overlay.addEventListener(
-        'transitionend',
-        () => {
-          if (!overlay.classList.contains('is-visible')) overlay.hidden = true;
-        },
-        { once: true }
-      );
+      overlay.addEventListener('transitionend', () => {
+        if (!overlay.classList.contains('is-visible')) overlay.hidden = true;
+      }, { once: true });
     };
 
-    const toggle = () => {
+    hamburger.addEventListener('click', () => {
       if (hamburger.getAttribute('aria-expanded') === 'true') close();
       else open();
-    };
-
-    hamburger.addEventListener('click', toggle);
-    overlay.addEventListener('click', close);
-
-    // Escape
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && sidebar.classList.contains('is-open')) {
-        close();
-      }
     });
 
-    // Клик по ссылке навигации закрывает меню
+    overlay.addEventListener('click', close);
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && sidebar.classList.contains('is-open')) close();
+    });
+
     sidebar.addEventListener('click', (e) => {
       const link = e.target.closest('.nav-link');
       if (link && window.innerWidth < 1024) close();
@@ -1179,7 +870,7 @@ const MobileMenu = {
 };
 
 /* ============================================================
-   12. СЧЁТЧИКИ (микро-анимация, требование 5.4)
+   12. СЧЁТЧИКИ
    ============================================================ */
 
 const Counters = {
@@ -1205,8 +896,7 @@ const Counters = {
 };
 
 /* ============================================================
-   13. МОДУЛЬ ПАЦИЕНТОВ — ФИЛЬТРЫ, СОРТИРОВКА, ПАГИНАЦИЯ
-       (использует делегирование событий — требование 5.4)
+   13. МОДУЛЬ ПАЦИЕНТОВ
    ============================================================ */
 
 const PatientsModule = {
@@ -1219,14 +909,7 @@ const PatientsModule = {
     page: 1
   },
 
-  elements: {
-    form: null,
-    search: null,
-    status: null,
-    content: null,
-    pagination: null,
-    sortToggle: null
-  },
+  elements: {},
 
   init() {
     this.elements.form = document.getElementById('filters-patients');
@@ -1242,7 +925,6 @@ const PatientsModule = {
     this.bindDelegatedActions();
     this.bindReset();
 
-    // Первоначальная загрузка со skeleton
     this.loadWithSkeleton();
   },
 
@@ -1250,7 +932,6 @@ const PatientsModule = {
     const { form, search, status } = this.elements;
     if (!form) return;
 
-    // Поиск с дебаунсом
     const onSearch = debounce((value) => {
       this.state.search = value.trim().toLowerCase();
       this.state.page = 1;
@@ -1259,14 +940,12 @@ const PatientsModule = {
 
     search.addEventListener('input', (e) => onSearch(e.target.value));
 
-    // Статус — мгновенно
     status.addEventListener('change', (e) => {
       this.state.status = e.target.value;
       this.state.page = 1;
       this.render();
     });
 
-    // Пол — чекбоксы
     form.addEventListener('change', (e) => {
       if (e.target.name === 'gender') {
         this.state.genders = Array.from(
@@ -1275,7 +954,6 @@ const PatientsModule = {
         this.state.page = 1;
         this.render();
       }
-
       if (e.target.name === 'view') {
         this.state.view = e.target.value;
         this.state.page = 1;
@@ -1285,11 +963,10 @@ const PatientsModule = {
   },
 
   bindReset() {
-    const btn = document.getElementById('reset-patients');
-    if (!btn || !this.elements.form) return;
+    const { form } = this.elements;
+    if (!form) return;
 
-    this.elements.form.addEventListener('reset', () => {
-      // Отложенный сброс, чтобы значения успели очиститься
+    form.addEventListener('reset', () => {
       setTimeout(() => {
         this.state.search = '';
         this.state.status = '';
@@ -1317,28 +994,19 @@ const PatientsModule = {
     });
   },
 
-  /**
-   * Делегирование событий для карточек (требование 5.4)
-   */
   bindDelegatedActions() {
     this.elements.content.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-action="open-patient"]');
-      if (btn) {
-        const id = btn.dataset.id;
-        this.openPatientModal(id);
-      }
+      if (!btn) return;
+      this.openPatientModal(btn.dataset.id);
     });
   },
 
   loadWithSkeleton() {
     const content = this.elements.content;
-    while (content.firstChild) content.removeChild(content.firstChild);
+    clear(content);
     content.appendChild(Renderer.skeleton(6));
-
-    // Симуляция загрузки (требование 5.4)
-    setTimeout(() => {
-      this.render();
-    }, 700);
+    setTimeout(() => this.render(), 700);
   },
 
   getFiltered() {
@@ -1353,7 +1021,6 @@ const PatientsModule = {
         p.phone.includes(search)
       );
     }
-
     if (status) items = items.filter((p) => p.status === status);
     if (genders.length > 0) items = items.filter((p) => genders.includes(p.gender));
 
@@ -1377,22 +1044,21 @@ const PatientsModule = {
     const content = this.elements.content;
     const pagination = this.elements.pagination;
 
-    while (content.firstChild) content.removeChild(content.firstChild);
+    clear(content);
 
     const items = this.getFiltered();
 
     if (items.length === 0) {
-      content.appendChild(
-        Renderer.emptyState({
-          title: 'Пациенты не найдены',
-          text: 'Попробуйте изменить параметры фильтрации или сбросить их.',
-          actionLabel: 'Сбросить фильтры',
-          onAction: () => {
-            document.getElementById('reset-patients').click();
-          }
-        })
-      );
-      while (pagination.firstChild) pagination.removeChild(pagination.firstChild);
+      content.appendChild(Renderer.emptyState({
+        title: 'Пациенты не найдены',
+        text: 'Попробуйте изменить параметры фильтрации или сбросить их.',
+        actionLabel: 'Сбросить фильтры',
+        onAction: () => {
+          const resetBtn = document.getElementById('reset-patients');
+          if (resetBtn) resetBtn.click();
+        }
+      }));
+      clear(pagination);
       return;
     }
 
@@ -1414,7 +1080,6 @@ const PatientsModule = {
     Pagination.render(pagination, items.length, this.state.page, (page) => {
       this.state.page = page;
       this.render();
-      // Мягкий скролл к началу секции
       content.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   },
@@ -1426,36 +1091,25 @@ const PatientsModule = {
     const body = el('div', { class: 'form' }, [
       el('p', {}, [el('strong', { text: 'ФИО: ' }), p.fullName]),
       el('p', {}, [el('strong', { text: 'ID: ' }), p.id]),
-      el('p', {}, [el('strong', { text: 'Дата рождения: ' }),
-        el('time', { datetime: p.birthDate, text: formatDate(p.birthDate) })
-      ]),
+      el('p', {}, [el('strong', { text: 'Дата рождения: ' }), el('time', { datetime: p.birthDate, text: formatDate(p.birthDate) })]),
       el('p', {}, [el('strong', { text: 'Пол: ' }), p.gender === 'male' ? 'Мужской' : 'Женский']),
       el('p', {}, [el('strong', { text: 'Телефон: ' }), p.phone]),
       el('p', {}, [el('strong', { text: 'Email: ' }), p.email]),
       el('p', {}, [el('strong', { text: 'Адрес: ' }), p.address]),
       el('p', {}, [el('strong', { text: 'Полис: ' }), p.insurance]),
       el('p', {}, [el('strong', { text: 'Группа крови: ' }), p.bloodType]),
-      el('p', {}, [
-        el('strong', { text: 'Аллергии: ' }),
-        p.allergies.length > 0 ? p.allergies.join(', ') : 'Нет'
-      ]),
-      el('p', {}, [
-        el('strong', { text: 'Экстренный контакт: ' }),
-        `${p.emergencyContact.name} (${p.emergencyContact.relation}), ${p.emergencyContact.phone}`
-      ]),
+      el('p', {}, [el('strong', { text: 'Аллергии: ' }), p.allergies.length > 0 ? p.allergies.join(', ') : 'Нет']),
+      el('p', {}, [el('strong', { text: 'Экстренный контакт: ' }), `${p.emergencyContact.name} (${p.emergencyContact.relation}), ${p.emergencyContact.phone}`]),
       el('p', {}, [el('strong', { text: 'Заметки: ' }), p.notes || '—']),
-      el('p', {}, [
-        el('strong', { text: 'Создан: ' }),
-        el('time', { datetime: p.createdAt, text: formatDateTime(p.createdAt) })
-      ])
+      el('p', {}, [el('strong', { text: 'Создан: ' }), el('time', { datetime: p.createdAt, text: formatDateTime(p.createdAt) })])
     ]);
 
     const closeBtn = el('button', {
       type: 'button',
       class: 'btn btn--outline',
-      text: 'Закрыть',
-      onclick: () => Modal.close()
+      text: 'Закрыть'
     });
+    closeBtn.addEventListener('click', () => Modal.close());
 
     Modal.open({
       title: `Пациент ${p.fullName}`,
@@ -1466,26 +1120,25 @@ const PatientsModule = {
 };
 
 /* ============================================================
-   14. РЕНДЕР ОСТАЛЬНЫХ РАЗДЕЛОВ (Приёмы, Диагнозы, Назначения)
+   14. РЕНДЕР ОСТАЛЬНЫХ РАЗДЕЛОВ
    ============================================================ */
 
 const renderAppointments = () => {
   const container = document.getElementById('appointments-content');
-  if (!container) return;
+  if (!container || container.dataset.rendered === 'true') return;
 
-  while (container.firstChild) container.removeChild(container.firstChild);
+  clear(container);
   container.appendChild(Renderer.spinner('Загрузка приёмов...'));
 
   setTimeout(() => {
-    while (container.firstChild) container.removeChild(container.firstChild);
+    clear(container);
+    container.dataset.rendered = 'true';
 
     if (DATA.appointments.length === 0) {
-      container.appendChild(
-        Renderer.emptyState({
-          title: 'Приёмов нет',
-          text: 'Список приёмов пуст.'
-        })
-      );
+      container.appendChild(Renderer.emptyState({
+        title: 'Приёмов нет',
+        text: 'Список приёмов пуст.'
+      }));
       return;
     }
 
@@ -1497,21 +1150,20 @@ const renderAppointments = () => {
 
 const renderDiagnoses = () => {
   const container = document.getElementById('diagnoses-content');
-  if (!container) return;
+  if (!container || container.dataset.rendered === 'true') return;
 
-  while (container.firstChild) container.removeChild(container.firstChild);
+  clear(container);
   container.appendChild(Renderer.spinner('Загрузка диагнозов...'));
 
   setTimeout(() => {
-    while (container.firstChild) container.removeChild(container.firstChild);
+    clear(container);
+    container.dataset.rendered = 'true';
 
     if (DATA.diagnoses.length === 0) {
-      container.appendChild(
-        Renderer.emptyState({
-          title: 'Диагнозов нет',
-          text: 'Список диагнозов пуст.'
-        })
-      );
+      container.appendChild(Renderer.emptyState({
+        title: 'Диагнозов нет',
+        text: 'Список диагнозов пуст.'
+      }));
       return;
     }
 
@@ -1523,21 +1175,20 @@ const renderDiagnoses = () => {
 
 const renderPrescriptions = () => {
   const container = document.getElementById('prescriptions-content');
-  if (!container) return;
+  if (!container || container.dataset.rendered === 'true') return;
 
-  while (container.firstChild) container.removeChild(container.firstChild);
+  clear(container);
   container.appendChild(Renderer.spinner('Загрузка назначений...'));
 
   setTimeout(() => {
-    while (container.firstChild) container.removeChild(container.firstChild);
+    clear(container);
+    container.dataset.rendered = 'true';
 
     if (DATA.prescriptions.length === 0) {
-      container.appendChild(
-        Renderer.emptyState({
-          title: 'Назначений нет',
-          text: 'Список назначений пуст.'
-        })
-      );
+      container.appendChild(Renderer.emptyState({
+        title: 'Назначений нет',
+        text: 'Список назначений пуст.'
+      }));
       return;
     }
 
@@ -1548,14 +1199,13 @@ const renderPrescriptions = () => {
 };
 
 /* ============================================================
-   15. МОДАЛЬНОЕ ОКНО "ДОБАВИТЬ ПАЦИЕНТА" (требования 2.5, 5.3)
+   15. ФОРМА "ДОБАВИТЬ ПАЦИЕНТА"
    ============================================================ */
 
 const AddPatientForm = {
   init() {
     const btn = document.getElementById('add-patient');
     if (!btn) return;
-
     btn.addEventListener('click', () => this.open());
   },
 
@@ -1567,7 +1217,6 @@ const AddPatientForm = {
       'aria-label': 'Форма добавления пациента'
     });
 
-    // Поля с data-validate
     const fields = [
       { id: 'f-fullname', label: 'ФИО', type: 'text', validate: 'required|minLength:2|maxLength:100', placeholder: 'Иванов Иван Иванович' },
       { id: 'f-birthdate', label: 'Дата рождения', type: 'date', validate: 'required' },
@@ -1587,18 +1236,17 @@ const AddPatientForm = {
         autocomplete: 'off'
       });
 
-      const row = el('div', { class: 'form__row' }, [
+      form.appendChild(el('div', { class: 'form__row' }, [
         el('label', { for: f.id, class: 'field__label' }, [
           f.label,
           el('span', { class: 'form__required', 'aria-hidden': 'true', text: '*' })
         ]),
         input
-      ]);
-      form.appendChild(row);
+      ]));
     });
 
-    // Пол — radio (кастомные)
-    const genderGroup = el('div', { class: 'form__row' }, [
+    // Пол — радио
+    form.appendChild(el('div', { class: 'form__row' }, [
       el('span', { class: 'field__label', text: 'Пол *' }),
       el('div', { class: 'radio-group' }, [
         el('label', { class: 'radio' }, [
@@ -1612,19 +1260,16 @@ const AddPatientForm = {
           el('span', { text: 'Женский' })
         ])
       ])
-    ]);
-    form.appendChild(genderGroup);
+    ]));
 
-    // Навешиваем валидацию
     Validator.attach(form);
 
-    // Кнопки
     const cancelBtn = el('button', {
       type: 'button',
       class: 'btn btn--outline',
-      text: 'Отмена',
-      onclick: () => Modal.close()
+      text: 'Отмена'
     });
+    cancelBtn.addEventListener('click', () => Modal.close());
 
     const submitBtn = el('button', {
       type: 'submit',
@@ -1636,13 +1281,10 @@ const AddPatientForm = {
 
     form.addEventListener('submit', (e) => {
       e.preventDefault();
-
       if (!Validator.validateForm(form)) {
         Toast.show('Исправьте ошибки в форме', 'error');
         return;
       }
-
-      // Успех — закрываем и показываем toast
       Modal.close();
       Toast.show('Пациент успешно добавлен', 'success');
     });
@@ -1653,7 +1295,6 @@ const AddPatientForm = {
       footer
     });
 
-    // Фокус на первое поле
     requestAnimationFrame(() => {
       const first = form.querySelector('input');
       if (first) first.focus();
@@ -1667,40 +1308,37 @@ const AddPatientForm = {
 
 const App = {
   init() {
-    ThemeManager.init();
-    Toast.init();
-    Modal.init();
-    Tabs.init();
-    Accordion.init();
-    Dropdown.init();
-    MobileMenu.init();
-    Counters.init();
-    PatientsModule.init();
-    AddPatientForm.init();
+    try {
+      Toast.init();
+      ThemeManager.init();
+      Modal.init();
+      Tabs.init();
+      Accordion.init();
+      Dropdown.init();
+      MobileMenu.init();
+      Counters.init();
+      PatientsModule.init();
+      AddPatientForm.init();
 
-    // Отрендерить остальные разделы при активации табов
-    const tabAppointments = document.getElementById('tab-appointments');
-    const tabDiagnoses = document.getElementById('tab-diagnoses');
-    const tabPrescriptions = document.getElementById('tab-prescriptions');
+      // Ленивый рендер остальных разделов при первом открытии таба
+      const tabAppointments = document.getElementById('tab-appointments');
+      const tabDiagnoses = document.getElementById('tab-diagnoses');
+      const tabPrescriptions = document.getElementById('tab-prescriptions');
 
-    tabAppointments?.addEventListener('click', renderAppointments, { once: true });
-    tabDiagnoses?.addEventListener('click', renderDiagnoses, { once: true });
-    tabPrescriptions?.addEventListener('click', renderPrescriptions, { once: true });
+      tabAppointments?.addEventListener('click', renderAppointments);
+      tabDiagnoses?.addEventListener('click', renderDiagnoses);
+      tabPrescriptions?.addEventListener('click', renderPrescriptions);
 
-    // Глобальная обработка ошибок — не оставлять мусор в консоли
-    window.addEventListener('error', (e) => {
-      // Можно логировать, но не выбрасывать
-      console.warn('Ошибка приложения:', e.message);
-    });
-
-    // Приветственный toast
-    setTimeout(() => {
-      Toast.show('Добро пожаловать в МИС!', 'info', 3000);
-    }, 800);
+      // Приветствие
+      setTimeout(() => {
+        Toast.show('Добро пожаловать в МИС!', 'info', 3000);
+      }, 800);
+    } catch (err) {
+      console.error('Ошибка инициализации приложения:', err);
+    }
   }
 };
 
-// Запуск после готовности DOM
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => App.init());
 } else {

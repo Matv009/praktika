@@ -1122,6 +1122,9 @@ export const prescriptions = [
    СПРАВОЧНИКИ (для отображения статусов и т.д.)
    ============================================================ */
 
+
+
+   
 export const patientStatusLabels = {
   active: "Активный",
   observation: "Наблюдение",
@@ -1175,6 +1178,24 @@ export const DATA = {
   prescriptions
 };
 
+export const LABELS = {
+  patientStatus: patientStatusLabels,
+  appointmentStatus: appointmentStatusLabels,
+  diagnosisSeverity: diagnosisSeverityLabels,
+  diagnosisStatus: diagnosisStatusLabels,
+  prescriptionType: prescriptionTypeLabels,
+  prescriptionStatus: prescriptionStatusLabels,
+  prescriptionPriority: prescriptionPriorityLabels
+};
+export const patientStatusLabels = { active: "Активный", observation: "Наблюдение", discharged: "Выписан" };
+export const appointmentStatusLabels = { scheduled: "Запланирован", completed: "Завершён", cancelled: "Отменён" };
+export const diagnosisSeverityLabels = { mild: "Лёгкая", moderate: "Средняя", severe: "Тяжёлая" };
+export const diagnosisStatusLabels = { active: "Активный", resolved: "Разрешён" };
+export const prescriptionTypeLabels = { medication: "Лекарство", procedure: "Процедура", diet: "Диета", referral: "Направление" };
+export const prescriptionStatusLabels = { scheduled: "Запланировано", active: "Активно", completed: "Завершено", cancelled: "Отменено" };
+export const prescriptionPriorityLabels = { high: "Высокий", medium: "Средний", low: "Низкий" };
+
+export const DATA = { patients, appointments, diagnoses, prescriptions };
 export const LABELS = {
   patientStatus: patientStatusLabels,
   appointmentStatus: appointmentStatusLabels,
